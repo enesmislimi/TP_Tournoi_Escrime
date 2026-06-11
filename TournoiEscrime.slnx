@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TournoiEscrime/TournoiEscrime.csproj" />
+    <Project Path="src/TournoiEscrime.Data/TournoiEscrime.Data.csproj" />
+    <Project Path="src/TournoiEscrime.Api/TournoiEscrime.Api.csproj" />
+    <Project Path="src/TournoiEscrime.Web/TournoiEscrime.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TournoiEscrime.Tests/TournoiEscrime.Tests.csproj" />

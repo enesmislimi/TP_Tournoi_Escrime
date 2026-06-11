@@ -1,0 +1,119 @@
+@page "/"
+@rendermode InteractiveServer
+@inject TournamentApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Tournois d'Escrime</PageTitle>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>&#x2694;&#xFE0F; Tournois d'Escrime</h1>
+        <button class="btn btn-primary" @onclick="ShowCreateForm">+ Nouveau tournoi</button>
+    </div>
+
+    @if (_showCreate)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Créer un tournoi</h5>
+                <div class="input-group">
+                    <input class="form-control" placeholder="Nom du tournoi" @bind="_newName" @onkeydown="OnKeyDown" />
+                    <button class="btn btn-success" @onclick="CreateTournament" disabled="@_creating">
+                        @(_creating ? "Création..." : "Créer")
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="() => _showCreate = false">Annuler</button>
+                </div>
+                @if (_createError is not null)
+                {
+                    <div class="text-danger mt-2">@_createError</div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Chargement...</p>
+        </div>
+    }
+    else if (_tournaments is null || _tournaments.Count == 0)
+    {
+        <div class="text-center py-5 text-muted">
+            <p class="fs-4">Aucun tournoi pour l'instant.</p>
+            <p>Créez votre premier tournoi pour commencer !</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var t in _tournaments)
+            {
+                <div class="col-md-4">
+                    <div class="card h-100 @(t.IsFinished ? "border-secondary" : "border-primary")">
+                        <div class="card-body">
+                            <h5 class="card-title">@t.Name</h5>
+                            <p class="card-text text-muted">
+                                @t.PlayerCount joueur(s) &middot; @t.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </p>
+                            <span class="badge @(t.IsFinished ? "bg-secondary" : "bg-success")">
+                                @(t.IsFinished ? "Terminé" : "En cours")
+                            </span>
+                        </div>
+                        <div class="card-footer">
+                            <button class="btn btn-sm btn-outline-primary w-100"
+                                    @onclick="@(() => Nav.NavigateTo($"/tournoi/{t.Id}"))">
+                                Gérer le tournoi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<TournamentSummary>? _tournaments;
+    private bool _loading = true;
+    private bool _showCreate;
+    private bool _creating;
+    private string _newName = "";
+    private string? _createError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tournaments = await Api.GetTournamentsAsync();
+        _loading = false;
+    }
+
+    private void ShowCreateForm()
+    {
+        _showCreate = true;
+        _newName = "";
+        _createError = null;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CreateTournament();
+    }
+
+    private async Task CreateTournament()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            _createError = "Le nom est obligatoire.";
+            return;
+        }
+        _creating = true;
+        _createError = null;
+        var created = await Api.CreateTournamentAsync(_newName);
+        _creating = false;
+        if (created is not null)
+            Nav.NavigateTo($"/tournoi/{created.Id}");
+        else
+            _createError = "Erreur lors de la création.";
+    }
+}

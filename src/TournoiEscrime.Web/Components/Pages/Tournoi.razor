@@ -1,0 +1,336 @@
+@page "/tournoi/{Id:int}"
+@rendermode InteractiveServer
+@inject TournamentApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>@(_tournament?.Name ?? "Tournoi")</PageTitle>
+
+@if (_loading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else if (_tournament is null)
+{
+    <div class="container mt-4">
+        <div class="alert alert-danger">Tournoi introuvable.</div>
+        <a href="/" class="btn btn-secondary">Retour</a>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <a href="/" class="btn btn-outline-secondary btn-sm">&larr; Retour</a>
+            <h1 class="mb-0">@_tournament.Name</h1>
+            <span class="badge @(_tournament.IsFinished ? "bg-secondary" : "bg-success") fs-6">
+                @(_tournament.IsFinished ? "Terminé" : "En cours")
+            </span>
+        </div>
+
+        <div class="row g-4">
+            <!-- Colonne gauche : gestion du tournoi -->
+            <div class="col-lg-5">
+
+                @if (!_tournament.IsFinished)
+                {
+                    <!-- Ajouter un joueur -->
+                    <div class="card mb-3">
+                        <div class="card-header fw-bold">Ajouter un joueur</div>
+                        <div class="card-body">
+                            <div class="input-group">
+                                <input class="form-control" placeholder="Nom du joueur"
+                                       @bind="_newPlayerName" @onkeydown="OnPlayerKeyDown" />
+                                <button class="btn btn-primary" @onclick="AddPlayer" disabled="@_addingPlayer">
+                                    Ajouter
+                                </button>
+                            </div>
+                            @if (_playerError is not null)
+                            {
+                                <div class="text-danger mt-1 small">@_playerError</div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Enregistrer un combat -->
+                    @if (_tournament.Players.Count > 0)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header fw-bold">Enregistrer un combat</div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <label class="form-label small">Joueur</label>
+                                    <select class="form-select" @bind="_selectedPlayerId">
+                                        <option value="0">-- Choisir un joueur --</option>
+                                        @foreach (var p in _tournament.Players.Where(p => !p.IsDisqualified))
+                                        {
+                                            <option value="@p.Id">@p.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small">Résultat</label>
+                                    <div class="btn-group w-100" role="group">
+                                        @foreach (var outcome in new[] { "Win", "Draw", "Loss" })
+                                        {
+                                            <input type="radio" class="btn-check" name="outcome" id="@outcome"
+                                                   value="@outcome" checked="@(_selectedOutcome == outcome)"
+                                                   @onchange="() => _selectedOutcome = outcome" />
+                                            <label class="btn @OutcomeButtonClass(outcome)" for="@outcome">
+                                                @OutcomeLabel(outcome)
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+                                <button class="btn btn-success w-100" @onclick="AddMatch"
+                                        disabled="@(_selectedPlayerId == 0 || _selectedOutcome is null || _addingMatch)">
+                                    @(_addingMatch ? "Enregistrement..." : "Enregistrer")
+                                </button>
+                                @if (_matchError is not null)
+                                {
+                                    <div class="text-danger mt-1 small">@_matchError</div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Disqualifier -->
+                        <div class="card mb-3">
+                            <div class="card-header fw-bold text-danger">Disqualifier un joueur</div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <select class="form-select" @bind="_disqualifyPlayerId">
+                                        <option value="0">-- Choisir --</option>
+                                        @foreach (var p in _tournament.Players.Where(p => !p.IsDisqualified))
+                                        {
+                                            <option value="@p.Id">@p.Name</option>
+                                        }
+                                    </select>
+                                    <button class="btn btn-outline-danger" @onclick="Disqualify"
+                                            disabled="@(_disqualifyPlayerId == 0)">
+                                        Disqualifier
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Terminer le tournoi -->
+                        <div class="d-grid">
+                            <button class="btn btn-warning" @onclick="FinishTournament">
+                                Terminer le tournoi
+                            </button>
+                        </div>
+                    }
+                }
+
+                @if (_tournament.IsFinished)
+                {
+                    <div class="d-grid">
+                        <button class="btn btn-warning btn-lg" @onclick="GoToChampion">
+                            Voir le champion
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- Colonne droite : classement en direct -->
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header fw-bold">
+                        Classement en direct
+                        @if (!_tournament.IsFinished)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary float-end" @onclick="RefreshRanking">
+                                Actualiser
+                            </button>
+                        }
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_ranking is null || _ranking.Count == 0)
+                        {
+                            <p class="text-muted text-center py-4">Aucun joueur inscrit.</p>
+                        }
+                        else
+                        {
+                            <table class="table table-hover mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Joueur</th>
+                                        <th class="text-end">Score</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in _ranking)
+                                    {
+                                        <tr class="@(p.IsDisqualified ? "table-secondary text-muted" : p.Rank == 1 ? "table-warning" : "")">
+                                            <td>@(p.Rank == 1 && !p.IsDisqualified ? "🥇" : p.Rank.ToString())</td>
+                                            <td>@p.Name</td>
+                                            <td class="text-end fw-bold">@p.Score pts</td>
+                                            <td>
+                                                @if (p.IsDisqualified)
+                                                {
+                                                    <span class="badge bg-danger">DQ</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+
+                <!-- Détail des combats par joueur -->
+                @if (_tournament.Players.Count > 0)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header fw-bold">Historique des combats</div>
+                        <div class="card-body">
+                            @foreach (var p in _tournament.Players)
+                            {
+                                <div class="mb-2">
+                                    <strong>@p.Name</strong>
+                                    @if (p.IsDisqualified) { <span class="badge bg-danger ms-1">DQ</span> }
+                                    <span class="text-muted ms-2">@p.Score pts</span>
+                                    <div class="mt-1">
+                                        @foreach (var m in p.Matches)
+                                        {
+                                            <span class="badge me-1 @MatchBadgeClass(m)">@MatchLabel(m)</span>
+                                        }
+                                        @if (!p.Matches.Any()) { <span class="text-muted small">Aucun combat</span> }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private TournamentDetail? _tournament;
+    private List<RankedPlayer>? _ranking;
+    private bool _loading = true;
+
+    private string _newPlayerName = "";
+    private bool _addingPlayer;
+    private string? _playerError;
+
+    private int _selectedPlayerId;
+    private string? _selectedOutcome;
+    private bool _addingMatch;
+    private string? _matchError;
+
+    private int _disqualifyPlayerId;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _tournament = await Api.GetTournamentAsync(Id);
+        if (_tournament is not null)
+            _ranking = await Api.GetRankingAsync(Id);
+        _loading = false;
+    }
+
+    private async Task RefreshRanking()
+    {
+        _tournament = await Api.GetTournamentAsync(Id);
+        _ranking = await Api.GetRankingAsync(Id);
+    }
+
+    private async Task OnPlayerKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddPlayer();
+    }
+
+    private async Task AddPlayer()
+    {
+        if (string.IsNullOrWhiteSpace(_newPlayerName))
+        {
+            _playerError = "Le nom est obligatoire.";
+            return;
+        }
+        _addingPlayer = true;
+        _playerError = null;
+        var result = await Api.AddPlayerAsync(Id, _newPlayerName);
+        _addingPlayer = false;
+        if (result is not null)
+        {
+            _newPlayerName = "";
+            await RefreshRanking();
+        }
+        else
+        {
+            _playerError = "Erreur lors de l'ajout.";
+        }
+    }
+
+    private async Task AddMatch()
+    {
+        if (_selectedPlayerId == 0 || _selectedOutcome is null) return;
+        _addingMatch = true;
+        _matchError = null;
+        var ok = await Api.AddMatchAsync(Id, _selectedPlayerId, _selectedOutcome);
+        _addingMatch = false;
+        if (ok)
+            await RefreshRanking();
+        else
+            _matchError = "Erreur lors de l'enregistrement.";
+    }
+
+    private async Task Disqualify()
+    {
+        if (_disqualifyPlayerId == 0) return;
+        await Api.DisqualifyAsync(Id, _disqualifyPlayerId);
+        _disqualifyPlayerId = 0;
+        await RefreshRanking();
+    }
+
+    private async Task FinishTournament()
+    {
+        await Api.FinishTournamentAsync(Id);
+        await LoadAsync();
+    }
+
+    private void GoToChampion() => Nav.NavigateTo($"/tournoi/{Id}/champion");
+
+    private static string OutcomeButtonClass(string outcome) => outcome switch
+    {
+        "Win"  => "btn-outline-success",
+        "Draw" => "btn-outline-warning",
+        "Loss" => "btn-outline-danger",
+        _      => "btn-outline-secondary"
+    };
+
+    private static string OutcomeLabel(string outcome) => outcome switch
+    {
+        "Win"  => "Victoire",
+        "Draw" => "Nul",
+        "Loss" => "Défaite",
+        _      => outcome
+    };
+
+    private static string MatchBadgeClass(string outcome) => outcome switch
+    {
+        "Win"  => "bg-success",
+        "Draw" => "bg-warning text-dark",
+        "Loss" => "bg-danger",
+        _      => "bg-secondary"
+    };
+
+    private static string MatchLabel(string outcome) => outcome switch
+    {
+        "Win"  => "V",
+        "Draw" => "N",
+        "Loss" => "D",
+        _      => outcome
+    };
+}

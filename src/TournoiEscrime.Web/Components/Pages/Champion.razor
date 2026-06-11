@@ -1,0 +1,72 @@
+@page "/tournoi/{Id:int}/champion"
+@rendermode InteractiveServer
+@inject TournamentApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Champion</PageTitle>
+
+<div class="container mt-5 text-center">
+    @if (_loading)
+    {
+        <div class="spinner-border text-warning" role="status"></div>
+    }
+    else if (_champion is null)
+    {
+        <div class="alert alert-info">Aucun champion (tournoi vide ou non terminé).</div>
+        <a href="/" class="btn btn-secondary">Retour</a>
+    }
+    else
+    {
+        <div class="display-1 mb-3">&#x1F3C6;</div>
+        <h1 class="display-3 fw-bold text-warning">@_champion.Name</h1>
+        <p class="fs-4 text-muted mb-4">Champion du tournoi avec <strong class="text-warning">@_champion.Score points</strong></p>
+
+        @if (_ranking is not null)
+        {
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Joueur</th>
+                                <th class="text-end">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _ranking)
+                            {
+                                <tr class="@(p.Rank == 1 ? "table-warning fw-bold" : "")">
+                                    <td>@(p.Rank == 1 ? "🥇" : p.Rank == 2 ? "🥈" : p.Rank == 3 ? "🥉" : p.Rank.ToString())</td>
+                                    <td>@p.Name @(p.IsDisqualified ? "(DQ)" : "")</td>
+                                    <td class="text-end">@p.Score pts</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <button class="btn btn-outline-secondary mt-3" @onclick="GoBack">
+            Retour au tournoi
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private RankedPlayer? _champion;
+    private List<RankedPlayer>? _ranking;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _champion = await Api.GetChampionAsync(Id);
+        _ranking = await Api.GetRankingAsync(Id);
+        _loading = false;
+    }
+
+    private void GoBack() => Nav.NavigateTo($"/tournoi/{Id}");
+}
