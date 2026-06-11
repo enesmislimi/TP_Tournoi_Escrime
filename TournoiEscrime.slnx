@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TournoiEscrime/TournoiEscrime.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TournoiEscrime.Tests/TournoiEscrime.Tests.csproj" />
+  </Folder>
+</Solution>

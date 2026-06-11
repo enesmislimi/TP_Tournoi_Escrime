@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+
+# Coverage reports
+coverage/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+
+# JetBrains Rider
+*.sln.iml
+
+# OS
+.DS_Store
+Thumbs.db
